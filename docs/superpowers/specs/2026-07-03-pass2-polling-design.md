@@ -1,49 +1,100 @@
-# Sim NYC Pass 2 — Synthetic Polling Engine
+# Sim NYC Pass 2 — Synthetic Polling Engine (validated design)
 
 ## What this builds
 
-A polling engine that takes a plain-English question, routes it to all 3,000 synthetic NYC personas, and returns geographically-disaggregated opinion data — real distributions by borough, neighborhood, income band, race/ethnicity, and housing status. The results are surfaced in a Next.js UI with a map and breakdown charts.
+A polling engine that takes a plain-English question, routes it to all 3,000
+synthetic NYC personas, and returns geographically-disaggregated opinion data —
+distributions by borough, income band, race/ethnicity, and housing status —
+surfaced in a Next.js UI with summary pills, a by-borough table, and demographic
+breakdown accordions.
 
 ## Background (Pass 1 recap)
 
-- **3,000 weighted personas** are loaded in Supabase table `personas` (id, puma, borough, neighborhood, card jsonb)
-- Each `card` has: age, sex, race_ethnicity, education, employment, personal_income, household_income, household_size, housing, gross_rent, language_at_home, commute, context_notes
-- Supabase schema already has `poll_runs` and `poll_batch_results` tables (see migration `0001_pass1_schema.sql`)
-- Next.js app at `src/` is scaffolded with shadcn/ui, Tailwind v4, App Router
+- **3,000 weighted personas** live in Supabase table `personas` (`id`, `puma`,
+  `borough`, `neighborhood`, `card` jsonb). Each `card` has: age, sex,
+  race_ethnicity, education, employment, personal_income, household_income,
+  household_size, housing, gross_rent, language_at_home, commute, context_notes.
+- Schema `personas` / `poll_runs` / `poll_batch_results` exists (migration
+  `0001_pass1_schema.sql`); public-read RLS in `0002_rls_public_read.sql`.
+- Next.js app (App Router, Next 16.2.10, React 19) scaffolded with shadcn/ui and
+  Tailwind v4. No API routes or poll pages yet.
+
+## Key decisions (locked in brainstorming)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Execution model | **Local/self-hosted, fire-and-forget** | Simplest v1; no Vercel 60s timeout to work around. Route handler returns `poll_id` immediately and continues processing in a detached async loop. |
+| Schema enforcement | **Anthropic `tool_use` with a strict JSON schema** | Reliable structured output; schema defined in one place so it can be swapped for `output_config.format` later. |
+| Scope | **Full vertical slice** | Setup → API (POST/GET/list) → both UI pages → one verified real poll run. |
+| Aggregation | **On-the-fly in the GET handler** | Join batch results × personas in JS; 3,000 rows is trivial. `poll_batch_results` stays the single source of truth. |
+
+### Corrections to the original spec
+
+- **Scale is 55 Claude calls per run** (one per PUMA batch, each returning ~55
+  persona answers), **not 3,025**. The cost estimate (~$0.03/run) already assumes
+  55 batches; the "3,025 calls" line in the original Model section was wrong.
+- Dependencies `@supabase/supabase-js` and `@anthropic-ai/sdk` are **not yet
+  installed**, and personas are **not yet loaded** into Supabase — both become
+  setup steps.
 
 ---
 
 ## Architecture
 
 ```
-User submits question
-       │
-       ▼
-POST /api/polls                          (Next.js Route Handler)
-  → insert poll_run row (status: running)
-  → stream personas from Supabase by PUMA batch
-  → for each batch: Claude API call → store poll_batch_results row
-  → mark poll_run complete
-       │
-       ▼
-GET /api/polls/[id]                      (polling / SSE)
-  → aggregate batch results
-  → return by-borough, by-demographic breakdowns
-       │
-       ▼
-/polls/[id] page                         (Next.js)
-  → live result tiles per borough
-  → breakdown table (race, income band, housing)
-  → PUMA-level map (optional stretch)
+POST /api/polls
+  → insert poll_run(status='running'), return { poll_id }
+  └─ (not awaited) runPoll():
+       fetch personas grouped by PUMA (55 groups, ~55 each)
+       for each PUMA batch, sequentially:
+         Claude call (tool_use) → PersonaAnswer[] → upsert poll_batch_results
+       on success → status='complete'; on throw → status='failed'
+
+GET /api/polls/[id]
+  → load poll_run + all poll_batch_results for the run
+  → join answers to personas.card in memory
+  → return { question, status, total_personas, responded, summary, by_borough, by_demographic }
+
+GET /api/polls
+  → last 10 poll_runs (id, question, status, created_at)
 ```
 
-**Batching strategy:** group personas by PUMA (55 groups, ~55 personas each). One Claude API call per PUMA batch. Each call gets a system prompt with the batch's persona cards and returns structured JSON with one response per persona.
+**Batching strategy:** group personas by PUMA. One Claude call per PUMA batch;
+each call's system prompt carries that batch's persona cards and returns one JSON
+object per persona. Batches run **sequentially** to stay within Anthropic rate
+limits (~3 min per full run on Haiku).
+
+**Durability:** fire-and-forget means a process restart mid-run leaves the run at
+`status='running'`. Partial results are still readable via GET while running.
+Full resume logic is out of scope, but the `UNIQUE(run_id, batch_index)`
+constraint (below) makes batch upserts idempotent, so a resume feature can be
+added later without schema change.
+
+---
+
+## Module breakdown
+
+Each unit has one purpose, a clear interface, and can be tested independently.
+
+| File | Purpose | Depends on |
+|---|---|---|
+| `src/lib/supabase/server.ts` | Service-role client for route handlers (writes + full reads) | `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` |
+| `src/lib/supabase/browser.ts` | Anon client for client-side read-only reads | `NEXT_PUBLIC_SUPABASE_*` |
+| `src/lib/polls/types.ts` | Shared types (`PersonaAnswer`, `PollAggregate`, …) + `incomeBand()` helper | — |
+| `src/lib/anthropic.ts` | Anthropic client + `runBatch(question, personas) → PersonaAnswer[]` via `tool_use` | `ANTHROPIC_API_KEY` |
+| `src/lib/polls/aggregate.ts` | **Pure function** `(batchResults, personas) → PollAggregate`. Primary unit-test target. | `types.ts` |
+| `src/lib/polls/runPoll.ts` | Orchestration: group personas, loop batches, upsert, set status; try/catch → `failed` | server client, `anthropic.ts` |
+| `src/app/api/polls/route.ts` | `POST` (create + kick off), `GET` (list last 10) | server client, `runPoll` |
+| `src/app/api/polls/[id]/route.ts` | `GET` (aggregate) | server client, `aggregate` |
+| `src/app/page.tsx` | Home: question input + recent polls; submit → redirect to `/polls/[id]` | browser client |
+| `src/app/polls/[id]/page.tsx` | Results: summary pills, by-borough table, breakdown accordions; polls GET every 2s | browser client |
 
 ---
 
 ## Data model
 
-### `poll_runs` (already exists)
+### `poll_runs` (exists)
+
 ```sql
 id uuid primary key
 question text not null
@@ -51,151 +102,162 @@ status text default 'running'   -- 'running' | 'complete' | 'failed'
 created_at timestamptz
 ```
 
-### `poll_batch_results` (already exists)
+### `poll_batch_results` (exists)
+
 ```sql
 id uuid primary key
 run_id uuid references poll_runs(id)
 puma text not null
 batch_index int not null
-results jsonb not null           -- array of {persona_id, answer, reasoning?}
+results jsonb not null            -- PersonaAnswer[]
 created_at timestamptz
 ```
 
-**`results` shape:**
+### Migration `0003_pass2_fk_cascade.sql` (new — apply before any Pass 2 data)
+
+Applies the two flags from the Pass 1 review:
+
+1. Drop and re-add `poll_batch_results.run_id` FK with `ON DELETE CASCADE`.
+2. Add `UNIQUE(run_id, batch_index)` (enables idempotent upsert / future resume).
+
+### `PersonaAnswer` shape (stored in `results`)
+
 ```json
-[
-  {
-    "persona_id": "uuid",
-    "answer": "yes" | "no" | "unsure",
-    "confidence": 0.0–1.0,
-    "reasoning": "one sentence"
-  }
-]
+{
+  "persona_id": "uuid",
+  "answer": "yes" | "no" | "unsure",
+  "confidence": 0.0,
+  "reasoning": "one sentence, first person"
+}
 ```
 
-**Answer schema is question-dependent.** For yes/no questions the above works. For multi-option questions the engine must parse the question type and instruct Claude accordingly. Start with yes/no/unsure only.
+**Answer schema is yes/no/unsure only** for Pass 2. Multi-option questions are
+out of scope.
+
+### Income bands
+
+`incomeBand(household_income)` buckets into: `<$30k`, `$30–60k`, `$60–100k`,
+`$100–150k`, `$150k+`.
 
 ---
 
 ## Claude prompt design
 
-### System prompt (per batch)
-```
-You are simulating how a group of NYC residents would respond to a survey question.
-Each persona below is a real statistical profile drawn from ACS 2024 census data.
-Respond as each person would based on their demographics, income, housing situation, and life context.
-Do not moralize or hedge. Each person has a genuine, consistent viewpoint shaped by their circumstances.
-Return a JSON array — one object per persona — with fields: persona_id, answer ("yes"|"no"|"unsure"), confidence (0.0–1.0), reasoning (one sentence, first person).
-```
+**Model:** `claude-haiku-4-5-20251001` (fast, cheap, structured output).
+`claude-sonnet-4-6` reserved for a future "deep mode" on smaller samples.
 
-### User message
-```
-Question: {question}
+**Schema enforcement:** a single `tool_use` tool `record_responses` whose
+`input_schema` is an array of `PersonaAnswer` objects (`answer` an enum,
+`confidence` a number, `persona_id` + `reasoning` strings), forced via
+`tool_choice: { type: "tool", name: "record_responses" }`. The schema lives in
+`anthropic.ts` so it can be swapped for `output_config.format` later.
 
-Personas:
-{json array of persona cards with id field}
-```
+**System prompt (per batch):** the persona-simulation instruction from the
+original spec (respond as each person would; no moralizing/hedging; one object
+per persona; first-person one-sentence reasoning).
 
-### Model
-`claude-haiku-4-5-20251001` — fast and cheap for high-volume structured output. ~55 personas × 55 PUMAs = 3,025 Claude calls total per poll run. Use `claude-sonnet-4-6` only for a "deep mode" option on smaller samples.
+**User message:** `Question: {question}` followed by the batch's persona cards as
+a JSON array with `id` fields.
 
-### Cost estimate
-- Haiku input: ~800 tokens/batch × 55 batches = ~44k tokens ≈ $0.02 per poll run
-- Output: ~200 tokens/batch × 55 = ~11k tokens ≈ $0.01 per poll run
-- **Total: ~$0.03 per full poll run** (3,000 personas)
+**`max_tokens`:** sized for ~55 objects (≈4000).
+
+### Cost (per full 3,000-persona run)
+
+~44k input + ~11k output tokens across 55 Haiku batches ≈ **~$0.03/run**.
 
 ---
 
-## API routes
+## API contracts
 
 ### `POST /api/polls`
-**Request:** `{ "question": "Should NYC ban gas stoves in new buildings?" }`
-**Response:** `{ "poll_id": "uuid" }` — kicks off background processing
-
-Background work (in the route handler, using streaming or a queue):
-1. Insert `poll_runs` row
-2. Fetch all personas from Supabase grouped by PUMA
-3. For each PUMA batch: call Claude, parse JSON, upsert `poll_batch_results`
-4. Update `poll_runs.status = 'complete'`
+Request: `{ "question": "Should NYC ban gas stoves in new buildings?" }`
+Response: `{ "poll_id": "uuid" }` — processing continues in the background.
 
 ### `GET /api/polls/[id]`
-**Response:**
 ```json
 {
   "question": "...",
-  "status": "running" | "complete",
+  "status": "running" | "complete" | "failed",
   "total_personas": 3000,
   "responded": 1540,
-  "summary": {
-    "yes": 0.47,
-    "no": 0.38,
-    "unsure": 0.15
-  },
+  "summary": { "yes": 0.47, "no": 0.38, "unsure": 0.15 },
   "by_borough": {
-    "Manhattan": { "yes": 0.61, "no": 0.29, "unsure": 0.10, "n": 603 },
-    ...
+    "Manhattan": { "yes": 0.61, "no": 0.29, "unsure": 0.10, "n": 603 }
   },
   "by_demographic": {
-    "housing": {
-      "owner": { "yes": 0.31, ... },
-      "renter": { "yes": 0.55, ... }
-    },
-    "income_band": { ... },
-    "race_ethnicity": { ... }
+    "housing":        { "owner": { "yes": 0.31, "no": 0.5, "unsure": 0.19, "n": 900 }, "renter": { } },
+    "income_band":    { "<$30k": { }, "$30–60k": { } },
+    "race_ethnicity": { }
   }
 }
 ```
 
-### `GET /api/polls` — list recent polls (last 10)
+### `GET /api/polls`
+Last 10 runs: `[{ id, question, status, created_at }]`.
 
 ---
 
 ## UI pages
 
-### `/` (home) — question input
-- Large text input: "Ask NYC anything"
-- Recent polls list
-- Submit → redirect to `/polls/[id]`
+### `/` (home)
+- Large text input ("Ask NYC anything") → `POST /api/polls` → redirect to
+  `/polls/[id]`.
+- Recent polls list (`GET /api/polls`).
 
-### `/polls/[id]` — results
-- Question displayed at top
-- Progress bar while running (poll `GET /api/polls/[id]` every 2s)
-- **Summary row:** YES / NO / UNSURE percentage pills
-- **By borough table:** 5 rows × 3 columns, sortable
-- **Breakdown accordion:** housing, income band, race/ethnicity — each shows yes/no/unsure bars
-- shadcn/ui Card + Progress + Table components
+### `/polls/[id]` (results)
+- Question at top; progress bar while `status === 'running'` (poll GET every 2s).
+- **Summary row:** YES / NO / UNSURE percentage pills.
+- **By-borough table:** 5 rows × (yes/no/unsure/n), sortable.
+- **Breakdown accordions:** housing, income band, race/ethnicity — each a
+  yes/no/unsure bar per group.
+- shadcn/ui `Card` + `Progress` + `Table` + accordion components.
 
 ---
 
-## Tech constraints
+## Testing
 
-- Next.js App Router, TypeScript strict, Tailwind v4
-- Supabase JS client (`@supabase/supabase-js`) for DB reads/writes from route handlers
-- Anthropic SDK (`@anthropic-ai/sdk`) for Claude calls — use structured output / `tool_use` to enforce JSON schema
-- No streaming to client in v1 — poll the GET endpoint every 2 seconds; add SSE in v2 if needed
-- Rate limiting: run PUMA batches sequentially (not parallel) to avoid Anthropic rate limits; ~3 minutes for a full run on Haiku
-- `ANTHROPIC_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` (gitignored)
-- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for client-side reads (read-only)
+- **`aggregate.ts` — unit tests** (primary target): fixture batch results +
+  fixture personas → known percentages. Cover the empty run, partial run
+  (some PUMAs missing), and a fully-complete run.
+- **`runBatch` — one integration smoke test** behind a real `ANTHROPIC_API_KEY`,
+  skipped in CI.
+- **End-to-end:** one real poll run verified manually during setup.
+
+---
+
+## Setup runbook (new session)
+
+1. `npm install @supabase/supabase-js @anthropic-ai/sdk`
+2. Apply `scripts/out/personas_insert.sql` to Supabase; verify persona count = 3000.
+3. Apply migration `0003_pass2_fk_cascade.sql`.
+4. Create `.env.local` (gitignored) with `ANTHROPIC_API_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+5. Run one real poll end-to-end and confirm aggregates render.
+
+**Next.js 16 caveat:** per `AGENTS.md`, this is not the Next.js in training data —
+read the relevant App Router / route-handler guides in `node_modules/next/dist/docs/`
+before writing route or page code.
 
 ---
 
 ## Out of scope for Pass 2
 
-- User authentication / saved polls
+- User auth / saved polls
 - Multi-option (non-binary) questions
 - PUMA-level map visualization
 - SSE / real-time streaming to client
-- Persona "explain your answer" drilldown
-- Export to CSV
+- Per-persona "explain your answer" drilldown
+- CSV export
+- Automatic resume of an interrupted run (schema supports it; logic deferred)
 
 ---
 
-## Open questions for the new session
+## Tech constraints
 
-1. **Background job execution:** Next.js Route Handlers time out at 60s on Vercel. The full 55-batch run takes ~3 min. Decide: (a) Vercel background functions, (b) chunked polling where the client triggers batch-by-batch, or (c) keep it simple and run on local/self-hosted where there's no timeout. Recommendation: start with (c) for v1, add Vercel background functions when deploying.
-
-2. **Structured output enforcement:** Use Claude `tool_use` with a strict JSON schema per batch, or parse raw JSON from the response? Tool use is more reliable for schema enforcement.
-
-3. **`poll_batch_results.run_id` FK needs `ON DELETE CASCADE`** (flagged in Pass 1 review). Apply as a migration before Pass 2 inserts data.
-
-4. **Personas not yet in Supabase** — Pass 1 loader generates `scripts/out/personas_insert.sql`; needs to be applied before Pass 2 can run. Add to Pass 2 setup steps.
+- Next.js App Router, TypeScript strict, Tailwind v4.
+- `@supabase/supabase-js` for DB access from route handlers.
+- `@anthropic-ai/sdk` for Claude calls (`tool_use` schema enforcement).
+- No client streaming in v1 — poll GET every 2s.
+- PUMA batches run sequentially to respect Anthropic rate limits.
+- Secrets in `.env.local` (gitignored); `NEXT_PUBLIC_*` for client reads only.
