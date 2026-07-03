@@ -23,12 +23,12 @@ def age_band(age: int) -> str:
 def education_band(label: Optional[str]) -> str:
     if not label:
         return "Unknown"
-    l = label.lower()
-    if any(k in l for k in ("bachelor", "master", "professional", "doctorate")):
+    lbl = label.lower()
+    if any(k in lbl for k in ("bachelor", "master", "professional", "doctorate")):
         return "Bachelor's or higher"
-    if "associate" in l or "college" in l:
+    if "associate" in lbl or "college" in lbl:
         return "Some college / Associate's"
-    if "high school diploma" in l or "ged" in l:
+    if "high school diploma" in lbl or "ged" in lbl:
         return "HS diploma or GED"
     return "Less than HS"
 

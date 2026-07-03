@@ -1,4 +1,3 @@
-import io
 import zipfile
 from pathlib import Path
 
@@ -37,7 +36,8 @@ def _download_and_extract(kind: str) -> Path:
                     f.write(chunk)
     with zipfile.ZipFile(zpath) as z:
         csv_names = [n for n in z.namelist() if n.endswith(".csv")]
-        assert len(csv_names) == 1, csv_names
+        if len(csv_names) != 1:
+            raise ValueError(f"Expected 1 CSV in zip, found {len(csv_names)}: {csv_names}")
         if not (DATA_DIR / csv_names[0]).exists():
             z.extract(csv_names[0], DATA_DIR)
     return DATA_DIR / csv_names[0]
@@ -99,14 +99,14 @@ def build_dataset(person_csv: Path, household_csv: Path,
 def _simplify_esr(label) -> str:
     if label is None:
         return None
-    l = label.lower()
-    if "unemployed" in l:
+    lbl = label.lower()
+    if "unemployed" in lbl:
         return "Unemployed"
-    if "armed forces" in l:
+    if "armed forces" in lbl:
         return "Armed forces"
-    if "not in labor force" in l:
+    if "not in labor force" in lbl:
         return "Not in labor force"
-    if "employed" in l:
+    if "employed" in lbl:
         return "Employed"
     return label
 

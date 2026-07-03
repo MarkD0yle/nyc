@@ -31,9 +31,9 @@ def emit_sql() -> None:
             # Build VALUES clause with properly escaped JSON
             values = []
             for c in batch:
-                puma = c["puma"]
-                borough = c["borough"]
-                neighborhood = c["neighborhood"]
+                puma = c["puma"].replace("'", "''")
+                borough = c["borough"].replace("'", "''")
+                neighborhood = (c["neighborhood"] or "").replace("'", "''")
                 card_json = json.dumps(c, ensure_ascii=False)
                 # Escape single quotes by doubling them
                 card_json_escaped = card_json.replace("'", "''")
