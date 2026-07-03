@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 
 from .config import OUT_DIR, borough_for_puma
@@ -48,6 +47,7 @@ def marginals(df: pd.DataFrame, weighted: bool) -> dict[str, dict[str, float]]:
         "race_ethnicity": _shares(d["race_ethnicity"].fillna("Unknown"), w),
         "housing": _shares(d["housing"].fillna("Unknown"), w),
         "education_band": _shares(d["education"].map(education_band), w),
+        "sex": _shares(d["sex"], w),
     }
 
 

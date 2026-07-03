@@ -23,8 +23,11 @@ def test_weighted_vs_unweighted_shares():
         "race_ethnicity": ["Hispanic or Latino"] * 3,
         "housing": ["renter"] * 3,
         "education": ["Regular high school diploma"] * 3,
+        "sex": ["Male", "Female", "Male"],
     })
     unw = marginals(df, weighted=False)
     w = marginals(df, weighted=True)
     assert round(unw["age_band"]["18-29"], 1) == 66.7
     assert round(w["age_band"]["65+"], 1) == 80.0
+    assert "Male" in unw["sex"]
+    assert "Female" in unw["sex"]
