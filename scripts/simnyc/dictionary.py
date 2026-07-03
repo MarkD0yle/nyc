@@ -20,6 +20,9 @@ def load_decode_maps(path: Optional[Path] = None) -> dict[str, dict[str, str]]:
     maps: dict[str, dict[str, str]] = {}
     with open(path, newline="", encoding="latin-1") as f:
         for row in csv.reader(f):
+            # Range rows (from != to, e.g. AGEP 0..99) are keyed by `from` only —
+            # numeric-range variables are not decodable via these maps. Fine here:
+            # the pipeline only decodes categorical vars (SEX, RAC1P, SCHL, ...).
             if len(row) >= 7 and row[0] == "VAL" and row[1] in WANTED:
                 var, code_from, label = row[1], row[4].strip(), row[6].strip()
                 maps.setdefault(var, {})[code_from.lstrip("0") or "0"] = label
