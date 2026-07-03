@@ -9,13 +9,18 @@ from .config import OUT_DIR, SCRIPTS_DIR
 
 BATCH = 500
 
+INSERT_SQL = (
+    "insert into personas (puma, borough, neighborhood, card)"
+    " values (%s, %s, %s, %s::jsonb)"
+)
+
 
 def emit_sql() -> None:
     """Generate SQL insert statements without connecting to database."""
-    cards = [json.loads(line) for line in open(OUT_DIR / "personas.jsonl")]
+    cards = [json.loads(line) for line in open(OUT_DIR / "personas.jsonl", encoding="utf-8")]
 
     output_path = OUT_DIR / "personas_insert.sql"
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         # Write truncate statement
         f.write("truncate table personas;\n")
 
@@ -61,13 +66,13 @@ def connect_and_load() -> None:
         )
         sys.exit(1)
 
-    cards = [json.loads(line) for line in open(OUT_DIR / "personas.jsonl")]
+    cards = [json.loads(line) for line in open(OUT_DIR / "personas.jsonl", encoding="utf-8")]
     with psycopg.connect(dsn) as conn, conn.cursor() as cur:
         cur.execute("truncate table personas")
         for i in range(0, len(cards), BATCH):
             batch = cards[i : i + BATCH]
             cur.executemany(
-                "insert into personas (puma, borough, neighborhood, card) values (%s, %s, %s, %s)",
+                INSERT_SQL,
                 [(c["puma"], c["borough"], c["neighborhood"], json.dumps(c)) for c in batch],
             )
         cur.execute("select count(*), count(distinct borough) from personas")
