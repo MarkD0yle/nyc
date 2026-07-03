@@ -8,6 +8,7 @@ def make_df(n=1000):
         "AGEP": rng.integers(0, 90, n),
         "PWGTP": rng.integers(1, 200, n),
         "PUMA": ["03810"] * n,
+        "rowid": range(n),  # unique marker to detect duplicate source rows
     })
 
 def test_age_floor():
@@ -17,7 +18,7 @@ def test_age_floor():
 def test_exact_n_and_no_duplicates():
     out = draw(make_df(5000), n=500, seed=42, min_age=18)
     assert len(out) == 500
-    assert out.index.is_unique
+    assert out["rowid"].is_unique  # no source row drawn twice (replace=False)
 
 def test_reproducible():
     a = draw(make_df(5000), n=500, seed=42, min_age=18)
