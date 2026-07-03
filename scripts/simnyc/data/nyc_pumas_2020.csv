@@ -1,0 +1,56 @@
+puma,borough,neighborhood
+04103,Manhattan,Lower East Side & Chinatown
+04104,Manhattan,Chelsea & Hell's Kitchen
+04107,Manhattan,Upper West Side
+04108,Manhattan,Upper East Side & Roosevelt Island
+04109,Manhattan,Morningside Heights & Hamilton Heights
+04110,Manhattan,Harlem
+04111,Manhattan,East Harlem
+04112,Manhattan,Washington Heights & Inwood
+04121,Manhattan,Financial District & Greenwich Village
+04165,Manhattan,"Midtown, East Midtown, & Flatiron"
+04204,Bronx,Highbridge & Concourse
+04205,Bronx,Morris Heights & Mount Hope
+04207,Bronx,"Fordham, Bedford Park, & Norwood"
+04208,Bronx,"Riverdale, Kingsbridge, & Marble Hill"
+04209,Bronx,Soundview & Parkchester
+04210,Bronx,Co-op City & Throgs Neck
+04211,Bronx,Pelham Parkway & Morris Park
+04212,Bronx,"Wakefield, Williamsbridge, & Eastchester"
+04221,Bronx,"Melrose, Mott Haven, Longwood, & Hunts Point"
+04263,Bronx,"Morrisania, Tremont, Belmont, & West Farms"
+04301,Brooklyn,Williamsburg & Greenpoint
+04302,Brooklyn,Downtown Brooklyn & Fort Greene
+04303,Brooklyn,Bedford-Stuyvesant
+04304,Brooklyn,Bushwick
+04305,Brooklyn,East New York & Cypress Hills
+04306,Brooklyn,Park Slope & Carroll Gardens
+04307,Brooklyn,Sunset Park & Windsor Terrace
+04308,Brooklyn,Crown Heights (North)
+04309,Brooklyn,Crown Heights (South)
+04310,Brooklyn,Bay Ridge & Dyker Heights
+04311,Brooklyn,Bensonhurst & Bath Beach
+04312,Brooklyn,Borough Park & Kensington
+04313,Brooklyn,Coney Island & Brighton Beach
+04314,Brooklyn,Flatbush & Midwood
+04315,Brooklyn,Sheepshead Bay & Gravesend (East)
+04316,Brooklyn,Ocean Hill & Brownsville
+04317,Brooklyn,East Flatbush
+04318,Brooklyn,Canarsie & Flatlands
+04401,Queens,Astoria & Queensbridge
+04402,Queens,"Long Island City, Sunnyside, & Woodside"
+04403,Queens,Jackson Heights & East Elmhurst
+04404,Queens,Elmhurst & Corona
+04405,Queens,"Ridgewood, Maspeth, & Middle Village"
+04406,Queens,Forest Hills & Rego Park
+04407,Queens,"Flushing, Murray Hill, & Whitestone"
+04408,Queens,"Fresh Meadows, Hillcrest, & Briarwood"
+04409,Queens,"Kew Gardens, Richmond Hill, & Woodhaven"
+04410,Queens,South Ozone Park & Howard Beach
+04411,Queens,"Auburndale, Bayside, & Douglaston"
+04412,Queens,"Jamaica, St. Albans, & Hollis"
+04413,Queens,"Queens Village, Bellerose, & Rosedale"
+04414,Queens,The Rockaways
+04501,Staten Island,North Shore
+04502,Staten Island,Mid-Island
+04503,Staten Island,South Shore
