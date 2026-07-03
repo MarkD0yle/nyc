@@ -22,22 +22,13 @@
 
 ## NYC PUMA reference (2020 vintage, state 36)
 
-| Borough | PUMA range | Count |
-|---|---|---|
-| Bronx | 03701–03710 | 10 |
-| Manhattan | 03801–03810 | 10 |
-| Staten Island | 03901–03903 | 3 |
-| Brooklyn | 04001–04018 | 18 |
-| Queens | 04101–04114 | 14 |
+**CORRECTED 2026-07-03:** the originally planned numeric ranges (03701–04114) were wrong — real 2020 NYC PUMA codes run 04103–04503 and are not contiguous by borough. The authoritative list is a **committed reference CSV** `scripts/simnyc/data/nyc_pumas_2020.csv` (columns `puma,borough,neighborhood`; 55 rows: Bronx 10, Manhattan 10, Staten Island 3, Brooklyn 18, Queens 14), generated from the Census TIGERweb REST API (`PUMA_TAD_TAZ_UGA_ZCTA/MapServer/3`, layer "2020 Census Public Use Microdata Areas", `STATE='36'`, borough parsed from the `NYC-<Borough> Community District N--<Neighborhood>` BASENAME pattern). Regeneration procedure documented in the CSV's header comment row is not needed at runtime — all code reads the committed CSV.
 
-Total: 55 PUMAs.
+## Source URLs (verified 2026-07-03)
 
-## Source URLs (verify with `curl -sI` in Task 1; adjust filename casing if 404)
-
-- Person file: `https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/csv_pny.zip`
-- Household file: `https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/csv_hny.zip`
-- Data dictionary (CSV): `https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/PUMS_Data_Dictionary_2024.csv`
-- PUMA names: `https://www2.census.gov/geo/docs/reference/puma2020/2020_PUMA_Names.txt`
+- Person file: `https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/csv_pny.zip` (200 ✓)
+- Household file: `https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/csv_hny.zip` (200 ✓)
+- Data dictionary (CSV): `https://www2.census.gov/programs-surveys/acs/tech_docs/pums/data_dict/PUMS_Data_Dictionary_2024.csv` (200 ✓ — note: `tech_docs`, not the data directory)
 
 ## File Structure
 
@@ -118,32 +109,25 @@ scripts/.env
 scripts/.venv/
 ```
 
-`scripts/simnyc/config.py`:
+`scripts/simnyc/config.py` (**CORRECTED 2026-07-03** — PUMA geography comes from the committed CSV, not numeric ranges):
 ```python
+import csv
+from functools import lru_cache
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = SCRIPTS_DIR / "data"
 OUT_DIR = SCRIPTS_DIR / "out"
+PUMA_CSV = Path(__file__).resolve().parent / "data" / "nyc_pumas_2020.csv"
 
 SEED = 20260703
 N_PERSONAS = 3000
 MIN_AGE = 18
 
-# 2020-vintage NYC PUMAs, NY state (36)
-NYC_PUMA_RANGES = {
-    "Bronx": (3701, 3710),
-    "Manhattan": (3801, 3810),
-    "Staten Island": (3901, 3903),
-    "Brooklyn": (4001, 4018),
-    "Queens": (4101, 4114),
-}
-
 URLS = {
     "person": "https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/csv_pny.zip",
     "household": "https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/csv_hny.zip",
-    "dictionary": "https://www2.census.gov/programs-surveys/acs/data/pums/2024/1-Year/PUMS_Data_Dictionary_2024.csv",
-    "puma_names": "https://www2.census.gov/geo/docs/reference/puma2020/2020_PUMA_Names.txt",
+    "dictionary": "https://www2.census.gov/programs-surveys/acs/tech_docs/pums/data_dict/PUMS_Data_Dictionary_2024.csv",
 }
 
 PERSON_FIELDS = ["SERIALNO", "AGEP", "SEX", "RAC1P", "HISP", "SCHL", "PINCP",
@@ -151,21 +135,26 @@ PERSON_FIELDS = ["SERIALNO", "AGEP", "SEX", "RAC1P", "HISP", "SCHL", "PINCP",
 HOUSEHOLD_FIELDS = ["SERIALNO", "TEN", "HINCP", "NP", "GRNTP", "TYPEHUGQ"]
 
 
+@lru_cache(maxsize=1)
+def puma_table() -> dict[str, dict]:
+    """puma -> {'borough': ..., 'neighborhood': ...} from the committed reference CSV."""
+    with open(PUMA_CSV, newline="") as f:
+        return {
+            row["puma"]: {"borough": row["borough"], "neighborhood": row["neighborhood"]}
+            for row in csv.DictReader(f)
+        }
+
+
 def nyc_puma_codes() -> set[str]:
-    return {
-        f"{code:05d}"
-        for lo, hi in NYC_PUMA_RANGES.values()
-        for code in range(lo, hi + 1)
-    }
+    return set(puma_table())
 
 
 def borough_for_puma(puma: str) -> str | None:
-    n = int(puma)
-    for borough, (lo, hi) in NYC_PUMA_RANGES.items():
-        if lo <= n <= hi:
-            return borough
-    return None
+    rec = puma_table().get(str(puma).zfill(5))
+    return rec["borough"] if rec else None
 ```
+
+Also create `scripts/simnyc/data/nyc_pumas_2020.csv` — the controller provides this file (copy from scratchpad; 55 rows + header `puma,borough,neighborhood`).
 
 Create empty `scripts/simnyc/__init__.py` and `scripts/tests/__init__.py`.
 
@@ -187,38 +176,36 @@ git add scripts .gitignore && git commit -m "chore: scaffold simnyc pipeline pac
 
 ### Task 2: PUMA lookup (borough + neighborhood names)
 
+**CORRECTED 2026-07-03:** geography now comes from the committed reference CSV (see Task 1) — no download, no name-parsing at runtime.
+
 **Files:**
-- Create: `scripts/simnyc/puma.py`, `scripts/tests/test_puma.py`, `scripts/tests/fixtures/puma_names_sample.txt`
+- Create: `scripts/simnyc/puma.py`, `scripts/tests/test_puma.py`
 
 **Interfaces:**
-- Consumes: `config.URLS["puma_names"]`, `config.borough_for_puma`, `config.nyc_puma_codes`
-- Produces: `puma.load_lookup(path: Path | None = None) -> dict[str, dict]` mapping 5-digit PUMA → `{"borough": str, "neighborhood": str}`. Downloads the names file to `DATA_DIR` if `path` is None. `puma.clean_name(raw: str) -> str` strips the `NYC-<Borough> Community District ...--` prefix and trailing ` PUMA`.
+- Consumes: `config.puma_table`
+- Produces: `puma.load_lookup() -> dict[str, dict]` mapping 5-digit PUMA → `{"borough": str, "neighborhood": str}` for all 55 NYC PUMAs.
 
-- [ ] **Step 1: Fixture + failing test**
-
-`scripts/tests/fixtures/puma_names_sample.txt` (real format: `STATEFP,PUMA5CE,PUMA NAME` — verify against the downloaded file and adjust the parser if the delimiter differs):
-```
-36,03810,NYC-Manhattan Community District 3--Chinatown & Lower East Side PUMA
-36,04001,NYC-Brooklyn Community District 1--Greenpoint & Williamsburg PUMA
-36,00100,Northern Adirondacks PUMA
-```
+- [ ] **Step 1: Failing test**
 
 `scripts/tests/test_puma.py`:
 ```python
-from pathlib import Path
-from simnyc.puma import load_lookup, clean_name
+from collections import Counter
+from simnyc.puma import load_lookup
 
-FIXTURE = Path(__file__).parent / "fixtures" / "puma_names_sample.txt"
+def test_has_all_55_nyc_pumas():
+    lookup = load_lookup()
+    assert len(lookup) == 55
+    counts = Counter(v["borough"] for v in lookup.values())
+    assert counts == {"Brooklyn": 18, "Queens": 14, "Manhattan": 10,
+                      "Bronx": 10, "Staten Island": 3}
 
-def test_lookup_maps_nyc_pumas_only():
-    lookup = load_lookup(FIXTURE)
-    assert lookup["03810"]["borough"] == "Manhattan"
-    assert lookup["04001"]["borough"] == "Brooklyn"
-    assert "00100" not in lookup  # not NYC
+def test_spot_checks():
+    lookup = load_lookup()
+    assert lookup["04107"] == {"borough": "Manhattan", "neighborhood": "Upper West Side"}
+    assert lookup["04503"]["borough"] == "Staten Island"
 
-def test_clean_name_strips_boilerplate():
-    raw = "NYC-Manhattan Community District 3--Chinatown & Lower East Side PUMA"
-    assert clean_name(raw) == "Chinatown & Lower East Side"
+def test_codes_are_five_digit_strings():
+    assert all(len(k) == 5 and k.isdigit() for k in load_lookup())
 ```
 
 Run: `cd scripts && .venv/bin/pytest tests/test_puma.py -v` — Expected: FAIL (module not found).
@@ -227,57 +214,20 @@ Run: `cd scripts && .venv/bin/pytest tests/test_puma.py -v` — Expected: FAIL (
 
 `scripts/simnyc/puma.py`:
 ```python
-import csv
-import re
-from pathlib import Path
-
-import requests
-
-from .config import DATA_DIR, URLS, borough_for_puma
+from .config import puma_table
 
 
-def clean_name(raw: str) -> str:
-    name = re.sub(r"\s*PUMA\s*$", "", raw.strip())
-    if "--" in name:
-        name = name.split("--", 1)[1]
-    return name.strip()
-
-
-def _download(dest: Path) -> Path:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if not dest.exists():
-        r = requests.get(URLS["puma_names"], timeout=60)
-        r.raise_for_status()
-        dest.write_bytes(r.content)
-    return dest
-
-
-def load_lookup(path: Path | None = None) -> dict[str, dict]:
-    if path is None:
-        path = _download(DATA_DIR / "2020_PUMA_Names.txt")
-    lookup: dict[str, dict] = {}
-    with open(path, newline="", encoding="latin-1") as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if len(row) < 3 or row[0].strip() == "STATEFP":
-                continue
-            state, code, name = row[0].strip(), row[1].strip().zfill(5), ",".join(row[2:]).strip()
-            if state != "36":
-                continue
-            borough = borough_for_puma(code)
-            if borough is None:
-                continue
-            lookup[code] = {"borough": borough, "neighborhood": clean_name(name)}
-    return lookup
+def load_lookup() -> dict[str, dict]:
+    """5-digit PUMA -> {'borough', 'neighborhood'} for all NYC PUMAs."""
+    return dict(puma_table())
 ```
 
-- [ ] **Step 3: Tests pass, then real-file check**
+- [ ] **Step 3: Tests pass**
 
 ```bash
 cd scripts && .venv/bin/pytest tests/test_puma.py -v
-.venv/bin/python -c "from simnyc.puma import load_lookup; l = load_lookup(); assert len(l) == 55, len(l); print('55 NYC PUMAs ok')"
 ```
-Expected: PASS, then `55 NYC PUMAs ok`. If the count is wrong or parsing fails, inspect the first lines of the downloaded file and fix the parser (header/delimiter drift), not the test.
+Expected: PASS.
 
 - [ ] **Step 4: Commit**
 

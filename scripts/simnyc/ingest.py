@@ -38,7 +38,8 @@ def _download_and_extract(kind: str) -> Path:
     with zipfile.ZipFile(zpath) as z:
         csv_names = [n for n in z.namelist() if n.endswith(".csv")]
         assert len(csv_names) == 1, csv_names
-        z.extract(csv_names[0], DATA_DIR)
+        if not (DATA_DIR / csv_names[0]).exists():
+            z.extract(csv_names[0], DATA_DIR)
     return DATA_DIR / csv_names[0]
 
 
@@ -71,6 +72,8 @@ def build_dataset(person_csv: Path, household_csv: Path,
         if pd.isna(code) or str(code).strip() == "":
             return None
         c = str(code).strip()
+        # Try the code as-given, then zero-stripped ("03" -> "3"); "0" strips
+        # to "" so `or "0"` restores it. Decode labels are never empty strings.
         return decode.get(var, {}).get(c) or decode.get(var, {}).get(c.lstrip("0") or "0")
 
     df["sex"] = df["SEX"].map(lambda c: dec("SEX", c))
