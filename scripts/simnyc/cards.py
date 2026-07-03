@@ -30,7 +30,7 @@ def _context_notes(card: dict) -> str:
         notes.append("Homeowner")
     if card["language_at_home"] not in (None, "English only"):
         notes.append(f"Speaks {card['language_at_home']} at home")
-    elif card["employment"] == "Unemployed":
+    if card["employment"] == "Unemployed":
         notes.append("Currently unemployed")
     return "; ".join(notes[:2])
 

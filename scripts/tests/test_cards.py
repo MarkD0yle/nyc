@@ -36,3 +36,10 @@ def test_no_invented_traits():
         "household_size", "housing", "gross_rent", "language_at_home",
         "commute", "context_notes",
     }
+
+
+def test_unemployment_note_not_suppressed_by_language():
+    row = ROW | {"employment": "Unemployed", "housing": None, "GRNTP": float("nan")}
+    c = build_card(row, LOOKUP)
+    assert "Speaks Cantonese at home" in c["context_notes"]
+    assert "Currently unemployed" in c["context_notes"]
