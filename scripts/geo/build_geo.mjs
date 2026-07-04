@@ -10,7 +10,7 @@ const PERSONAS = path.join(ROOT, "scripts/out/personas.jsonl");
 const OUT_PUMAS = path.join(ROOT, "public/nyc_pumas.geojson");
 const OUT_PERSONAS = path.join(ROOT, "public/personas.geo.json");
 const TIGER =
-  "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/PUMA_TAD_TAZ_UGA_ZCTA/MapServer/0/query?where=STATE%3D36&outFields=*&outSR=4326&f=geojson";
+  "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/PUMA_TAD_TAZ_UGA_ZCTA/MapServer/0/query?where=STATE%3D%2736%27&outFields=*&outSR=4326&f=geojson";
 const NYC_BBOX = [-74.3, 40.4, -73.6, 41.0]; // [minLng,minLat,maxLng,maxLat]
 
 // --- seeded RNG (deterministic scatter) ---
