@@ -45,3 +45,4 @@ scripts/data/
 scripts/out/
 scripts/.env
 scripts/.venv/
+scripts/geo/nyc_pumas_raw.geojson
