@@ -18,21 +18,27 @@ const INITIAL_VIEW_STATE = {
   maxZoom: 13,
 };
 
-const BOROUGH_OUTLINE: Record<string, [number, number, number]> = {
-  Manhattan: [86, 180, 233], Brooklyn: [0, 158, 115], Queens: [230, 159, 0],
-  Bronx: [213, 94, 0], "Staten Island": [204, 121, 167],
+// Muted, dark, low-saturation land tints — one per borough. Kept far darker than
+// any dot color so the persona points always read on top; the subtle hue shift is
+// just enough to tell the boroughs apart as land regions.
+const LAND_FILL: Record<string, [number, number, number]> = {
+  Manhattan: [30, 46, 60], Brooklyn: [28, 54, 48], Queens: [54, 50, 34],
+  Bronx: [58, 42, 38], "Staten Island": [48, 42, 56],
 };
+const LAND_DEFAULT: [number, number, number] = [38, 46, 54];
+// Neutral shoreline — the dissolved borough edge against the water background.
+const COASTLINE: [number, number, number, number] = [120, 165, 190, 210];
 
 interface Props {
   personas: GeoPersona[];
-  pumas: GeoJSON.FeatureCollection;
+  boroughs: GeoJSON.FeatureCollection;
   colorAttr: AttrDef;
   filterValues: string[];
 }
 
 interface Hover { x: number; y: number; p: GeoPersona }
 
-export default function PersonaMap({ personas, pumas, colorAttr, filterValues }: Props) {
+export default function PersonaMap({ personas, boroughs, colorAttr, filterValues }: Props) {
   const [hover, setHover] = useState<Hover | null>(null);
 
   const pass = useMemo(
@@ -42,17 +48,21 @@ export default function PersonaMap({ personas, pumas, colorAttr, filterValues }:
   const active = useMemo(() => personas.filter(pass), [personas, pass]);
 
   const layers = [
+    // land silhouette: dissolved borough polygons filled as solid land, so the
+    // water background carves out the recognizable NYC coastline. A crisp neutral
+    // shoreline traces each borough edge.
     new GeoJsonLayer({
-      id: "pumas",
-      data: pumas,
+      id: "boroughs",
+      data: boroughs,
       stroked: true,
       filled: true,
-      getFillColor: [255, 255, 255, 8],
-      getLineColor: (f: GeoJSON.Feature) =>
-        [...(BOROUGH_OUTLINE[(f.properties?.borough as string) ?? ""] ?? [120, 120, 130]), 160] as
+      getFillColor: (f: GeoJSON.Feature) =>
+        [...(LAND_FILL[(f.properties?.borough as string) ?? ""] ?? LAND_DEFAULT), 236] as
           [number, number, number, number],
-      getLineWidth: 40,
-      lineWidthMinPixels: 1,
+      getLineColor: COASTLINE,
+      getLineWidth: 25,
+      lineWidthMinPixels: 1.2,
+      lineWidthMaxPixels: 2.5,
       pickable: false,
     }),
     // faint context layer: every persona, always drawn underneath

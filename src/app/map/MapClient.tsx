@@ -11,7 +11,7 @@ const PersonaMap = dynamic(() => import("@/components/map/PersonaMap"), { ssr: f
 
 export function MapClient() {
   const [personas, setPersonas] = useState<GeoPersona[] | null>(null);
-  const [pumas, setPumas] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [boroughs, setBoroughs] = useState<GeoJSON.FeatureCollection | null>(null);
   const [colorKey, setColorKey] = useState("borough");
   const [filterValues, setFilterValues] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
@@ -20,11 +20,11 @@ export function MapClient() {
   useEffect(() => {
     Promise.all([
       fetch("/personas.geo.json").then((r) => r.json()),
-      fetch("/nyc_pumas.geojson").then((r) => r.json()),
+      fetch("/nyc_boroughs.geojson").then((r) => r.json()),
     ])
       .then(([p, g]) => {
         setPersonas(p);
-        setPumas(g);
+        setBoroughs(g);
         requestAnimationFrame(() => setReady(true)); // triggers fade-in
       })
       .catch(() => {
@@ -40,10 +40,10 @@ export function MapClient() {
     return personas.filter(filterPredicate(colorAttr, filterValues)).length;
   }, [personas, colorAttr, filterValues]);
 
-  const loaded = personas && pumas && colorAttr;
+  const loaded = personas && boroughs && colorAttr;
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-[#0a0e17]">
+    <main className="relative h-screen w-screen overflow-hidden bg-[#0a1824]">
       {!loaded && (
         <div className="absolute inset-0 grid place-items-center text-sm text-neutral-500">
           {error ?? "loading 3,000 New Yorkers…"}
@@ -56,7 +56,7 @@ export function MapClient() {
         >
           <PersonaMap
             personas={personas}
-            pumas={pumas}
+            boroughs={boroughs}
             colorAttr={colorAttr}
             filterValues={filterValues}
           />

@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "geo": "node scripts/geo/build_geo.mjs",
+    "geo:boroughs": "node scripts/geo/build_boroughs.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@turf/turf": "^7.3.5",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
