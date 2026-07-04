@@ -15,16 +15,21 @@ export function MapClient() {
   const [colorKey, setColorKey] = useState("borough");
   const [filterValues, setFilterValues] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       fetch("/personas.geo.json").then((r) => r.json()),
       fetch("/nyc_pumas.geojson").then((r) => r.json()),
-    ]).then(([p, g]) => {
-      setPersonas(p);
-      setPumas(g);
-      requestAnimationFrame(() => setReady(true)); // triggers fade-in
-    });
+    ])
+      .then(([p, g]) => {
+        setPersonas(p);
+        setPumas(g);
+        requestAnimationFrame(() => setReady(true)); // triggers fade-in
+      })
+      .catch(() => {
+        setError("Could not load map data.");
+      });
   }, []);
 
   const attrs = useMemo(() => (personas ? buildAttributes(personas) : []), [personas]);
@@ -41,7 +46,7 @@ export function MapClient() {
     <main className="relative h-screen w-screen overflow-hidden bg-[#0a0e17]">
       {!loaded && (
         <div className="absolute inset-0 grid place-items-center text-sm text-neutral-500">
-          loading 3,000 New Yorkers…
+          {error ?? "loading 3,000 New Yorkers…"}
         </div>
       )}
       {loaded && (

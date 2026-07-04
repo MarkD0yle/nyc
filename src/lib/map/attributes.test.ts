@@ -82,15 +82,42 @@ describe("buildAttributes", () => {
     );
     const attr = buildAttributes(many).find((a) => a.key === "language_at_home")!;
     expect(attr.values).toContain("Other");
-    expect(attr.values.length).toBeLessThanOrEqual(9); // top 8 + Other
+    expect(attr.values.length).toBeLessThanOrEqual(8); // top 7 + Other
     // a language outside the kept set maps to "Other"
     const rare = attr.values.includes("Lang19") ? "LangZZZ" : "Lang19";
     expect(attr.accessor(persona({ language_at_home: rare }))).toBe("Other");
   });
 
+  test("'Other' gets a color distinct from the most common language", () => {
+    const many = Array.from({ length: 20 }, (_, i) =>
+      persona({ id: i, language_at_home: `Lang${i}` }),
+    );
+    const attr = buildAttributes(many).find((a) => a.key === "language_at_home")!;
+    expect(attr.values).toContain("Other");
+    expect(attr.values.length).toBeLessThanOrEqual(8);
+    expect(attr.color("Other")).not.toEqual(attr.color(attr.values[0]));
+  });
+
   test("color is stable for a repeated value", () => {
     const b = byKey("borough");
     expect(b.color("Queens")).toEqual(b.color("Queens"));
+  });
+
+  test("income_band 'Unknown' renders neutral gray, distinct from every real band", () => {
+    const income = byKey("income_band");
+    const unknownColor = income.color("Unknown");
+    const realBands = ["<$30k", "$30–60k", "$60–100k", "$100–150k", "$150k+"];
+    for (const band of realBands) {
+      expect(unknownColor).not.toEqual(income.color(band));
+    }
+  });
+
+  test("income_band '$150k+' is the ramp's bright terminus color (not orange)", () => {
+    const income = byKey("income_band");
+    // The ramp's terminus (t=1) is the brightest stop, [240, 249, 33] (yellow),
+    // not the mid-ramp orange that "Unknown" occupying the last slot would produce.
+    expect(income.color("$150k+")).toEqual([240, 249, 33]);
+    expect(income.color("<$30k")).not.toEqual(income.color("$150k+"));
   });
 });
 

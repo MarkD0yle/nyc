@@ -12,7 +12,10 @@ export interface AttrDef {
   color: (value: string) => RGB;
 }
 
-export const FADED_RGBA: [number, number, number, number] = [130, 130, 140, 26];
+export const FADED_RGBA: [number, number, number, number] = [130, 130, 140, 55];
+
+// Neutral gray used for "Unknown"/non-ramp ordinal values, rendered outside the ramp.
+const NEUTRAL_RGB: RGB = [120, 120, 130];
 
 // Okabe–Ito colorblind-safe categorical palette (+ neutral fallback).
 const CATEGORICAL: RGB[] = [
@@ -47,12 +50,20 @@ function categorical(key: string, label: string, values: string[], accessor: (p:
   };
 }
 
-function ordinal(key: string, label: string, values: string[], accessor: (p: GeoPersona) => string): AttrDef {
-  const index = new Map(values.map((v, i) => [v, i]));
-  const n = Math.max(1, values.length - 1);
+function ordinal(
+  key: string,
+  label: string,
+  values: string[],
+  accessor: (p: GeoPersona) => string,
+  neutralValues: string[] = [],
+): AttrDef {
+  const neutral = new Set(neutralValues);
+  const rampValues = values.filter((v) => !neutral.has(v));
+  const index = new Map(rampValues.map((v, i) => [v, i]));
+  const n = Math.max(1, rampValues.length - 1);
   return {
     key, label, kind: "ordinal", values, accessor,
-    color: (v) => rampColor((index.get(v) ?? 0) / n),
+    color: (v) => (neutral.has(v) ? NEUTRAL_RGB : rampColor((index.get(v) ?? 0) / n)),
   };
 }
 
@@ -82,7 +93,7 @@ function languageAttr(personas: GeoPersona[]): AttrDef {
   for (const p of personas) counts.set(p.language_at_home, (counts.get(p.language_at_home) ?? 0) + 1);
   const top = [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 8)
+    .slice(0, 7)
     .map(([v]) => v);
   const keep = new Set(top);
   const values = keep.size < counts.size ? [...top, "Other"] : top;
@@ -96,7 +107,7 @@ export function buildAttributes(personas: GeoPersona[]): AttrDef[] {
     categorical("borough", "Borough", distinct(personas.map((p) => p.borough)).sort(), (p) => p.borough),
     categorical("race_ethnicity", "Race / ethnicity", distinct(personas.map((p) => p.race_ethnicity)).sort(), (p) => p.race_ethnicity),
     categorical("housing", "Housing", distinct(personas.map((p) => p.housing)).sort(), (p) => p.housing),
-    ordinal("income_band", "Household income", ["<$30k", "$30–60k", "$60–100k", "$100–150k", "$150k+", "Unknown"], (p) => incomeBand(p.household_income)),
+    ordinal("income_band", "Household income", ["<$30k", "$30–60k", "$60–100k", "$100–150k", "$150k+", "Unknown"], (p) => incomeBand(p.household_income), ["Unknown"]),
     languageAttr(personas),
     ordinal("age_band", "Age", ["<18", "18–29", "30–44", "45–64", "65+"], (p) => ageBand(p.age)),
   ];
