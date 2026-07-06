@@ -7,6 +7,7 @@ import { GeoJsonLayer, ScatterplotLayer } from "@deck.gl/layers";
 import type { AttrDef } from "@/lib/map/attributes";
 import { FADED_RGBA, filterPredicate } from "@/lib/map/attributes";
 import type { GeoPersona } from "@/lib/map/persona";
+import type { TransitLayerKey, SubwayStation, CitiBikeData } from "@/lib/map/transit";
 
 const INITIAL_VIEW_STATE = {
   longitude: -73.94,
@@ -34,6 +35,13 @@ interface Props {
   boroughs: GeoJSON.FeatureCollection;
   colorAttr: AttrDef;
   filterValues: string[];
+  transitOn?: Record<TransitLayerKey, boolean>;
+  transitData?: {
+    subwayLines?: GeoJSON.FeatureCollection;
+    subwayStations?: SubwayStation[];
+    bikeRoutes?: GeoJSON.FeatureCollection;
+    citibike?: CitiBikeData;
+  };
 }
 
 interface Hover { x: number; y: number; p: GeoPersona }

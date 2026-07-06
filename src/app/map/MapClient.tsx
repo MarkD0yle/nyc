@@ -6,6 +6,8 @@ import { buildAttributes, filterPredicate } from "@/lib/map/attributes";
 import type { GeoPersona } from "@/lib/map/persona";
 import { ControlPanel } from "@/components/map/ControlPanel";
 import { Legend } from "@/components/map/Legend";
+import type { TransitLayerKey, SubwayStation, CitiBikeData } from "@/lib/map/transit";
+import { TRANSIT_LAYERS } from "@/lib/map/transit";
 
 const PersonaMap = dynamic(() => import("@/components/map/PersonaMap"), { ssr: false });
 
@@ -16,6 +18,18 @@ export function MapClient() {
   const [filterValues, setFilterValues] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [transitOn, setTransitOn] = useState<Record<TransitLayerKey, boolean>>({
+    subwayLines: false,
+    subwayStations: false,
+    bikeRoutes: false,
+    citibike: false,
+  });
+  const [transitData, setTransitData] = useState<{
+    subwayLines?: GeoJSON.FeatureCollection;
+    subwayStations?: SubwayStation[];
+    bikeRoutes?: GeoJSON.FeatureCollection;
+    citibike?: CitiBikeData;
+  }>({});
 
   useEffect(() => {
     Promise.all([
@@ -31,6 +45,23 @@ export function MapClient() {
         setError("Could not load map data.");
       });
   }, []);
+
+  useEffect(() => {
+    const fetchMap: Record<TransitLayerKey, string> = {
+      subwayLines: "/subway_lines.geojson",
+      subwayStations: "/subway_stations.json",
+      bikeRoutes: "/bike_routes.geojson",
+      citibike: "/citibike_stations.json",
+    };
+    TRANSIT_LAYERS.forEach(({ key }) => {
+      if (transitOn[key] && transitData[key] === undefined) {
+        fetch(fetchMap[key])
+          .then((r) => r.json())
+          .then((data) => setTransitData((prev) => ({ ...prev, [key]: data })))
+          .catch(console.error);
+      }
+    });
+  }, [transitOn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const attrs = useMemo(() => (personas ? buildAttributes(personas) : []), [personas]);
   const colorAttr = attrs.find((a) => a.key === colorKey) ?? attrs[0];
@@ -59,6 +90,8 @@ export function MapClient() {
             boroughs={boroughs}
             colorAttr={colorAttr}
             filterValues={filterValues}
+            transitOn={transitOn}
+            transitData={transitData}
           />
           <ControlPanel
             attrs={attrs}
@@ -68,6 +101,8 @@ export function MapClient() {
             onFilterValues={setFilterValues}
             shown={shown}
             total={personas.length}
+            transitOn={transitOn}
+            onTransitOn={(k, on) => setTransitOn((prev) => ({ ...prev, [k]: on }))}
           />
           <Legend attr={colorAttr} />
         </div>
