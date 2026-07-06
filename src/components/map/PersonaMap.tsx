@@ -8,6 +8,7 @@ import type { AttrDef } from "@/lib/map/attributes";
 import { FADED_RGBA, filterPredicate } from "@/lib/map/attributes";
 import type { GeoPersona } from "@/lib/map/persona";
 import type { TransitLayerKey, SubwayStation, CitiBikeData } from "@/lib/map/transit";
+import { routeColor, BIKE_CLASS_COLOR } from "@/lib/map/transit";
 
 const INITIAL_VIEW_STATE = {
   longitude: -73.94,
@@ -44,9 +45,11 @@ interface Props {
   };
 }
 
-interface Hover { x: number; y: number; p: GeoPersona }
+type Hover =
+  | { kind: "persona"; x: number; y: number; p: GeoPersona }
+  | { kind: "station"; x: number; y: number; s: SubwayStation };
 
-export default function PersonaMap({ personas, boroughs, colorAttr, filterValues }: Props) {
+export default function PersonaMap({ personas, boroughs, colorAttr, filterValues, transitOn, transitData }: Props) {
   const [hover, setHover] = useState<Hover | null>(null);
 
   const pass = useMemo(
@@ -56,7 +59,7 @@ export default function PersonaMap({ personas, boroughs, colorAttr, filterValues
   const active = useMemo(() => personas.filter(pass), [personas, pass]);
 
   const layers = [
-    // land silhouette: dissolved borough polygons filled as solid land, so the
+    // 1. land silhouette: dissolved borough polygons filled as solid land, so the
     // water background carves out the recognizable NYC coastline. A crisp neutral
     // shoreline traces each borough edge.
     new GeoJsonLayer({
@@ -73,7 +76,42 @@ export default function PersonaMap({ personas, boroughs, colorAttr, filterValues
       lineWidthMaxPixels: 2.5,
       pickable: false,
     }),
-    // faint context layer: every persona, always drawn underneath
+    // 2. bike routes (conditional)
+    transitOn?.bikeRoutes && transitData?.bikeRoutes
+      ? new GeoJsonLayer({
+          id: "bike-routes",
+          data: transitData.bikeRoutes,
+          stroked: true,
+          filled: false,
+          getLineColor: (f: GeoJSON.Feature) => {
+            const c = (f.properties?.c as "p" | "l" | "s") ?? "s";
+            const [r, g, b] = BIKE_CLASS_COLOR[c] ?? BIKE_CLASS_COLOR.s;
+            return [r, g, b, 140];
+          },
+          lineWidthMinPixels: 0.7,
+          lineWidthMaxPixels: 2,
+          pickable: false,
+        })
+      : null,
+    // 3. subway lines (conditional)
+    // Overlapping trunk services (1/2/3 on 7th Ave) render last-on-top single color — cosmetic.
+    transitOn?.subwayLines && transitData?.subwayLines
+      ? new GeoJsonLayer({
+          id: "subway-lines",
+          data: transitData.subwayLines,
+          stroked: true,
+          filled: false,
+          getLineColor: (f: GeoJSON.Feature) => {
+            const [r, g, b] = routeColor((f.properties?.service as string) ?? "");
+            return [r, g, b, 230];
+          },
+          getLineWidth: 40,
+          lineWidthMinPixels: 1.4,
+          lineWidthMaxPixels: 3.5,
+          pickable: false,
+        })
+      : null,
+    // 4. faint context layer: every persona, always drawn underneath
     new ScatterplotLayer({
       id: "context",
       data: personas,
@@ -84,7 +122,43 @@ export default function PersonaMap({ personas, boroughs, colorAttr, filterValues
       radiusMaxPixels: 4,
       pickable: false,
     }),
-    // active layer: only rows passing the filter, colored by the attribute
+    // 5. subway stations (conditional)
+    transitOn?.subwayStations && transitData?.subwayStations
+      ? new ScatterplotLayer<SubwayStation>({
+          id: "subway-stations",
+          data: transitData.subwayStations,
+          getPosition: (s: SubwayStation) => [s.lng, s.lat],
+          getFillColor: [235, 238, 245, 235],
+          getRadius: 30,
+          radiusMinPixels: 2,
+          radiusMaxPixels: 5,
+          stroked: false,
+          pickable: true,
+          autoHighlight: true,
+          highlightColor: [255, 220, 0, 255],
+          onHover: (info) =>
+            setHover(
+              info.object
+                ? { kind: "station", x: info.x, y: info.y, s: info.object as SubwayStation }
+                : null,
+            ),
+        })
+      : null,
+    // 6. Citi Bike stations (conditional)
+    transitOn?.citibike && transitData?.citibike
+      ? new ScatterplotLayer({
+          id: "citibike",
+          data: transitData.citibike.stations,
+          getPosition: (s) => [s.lng, s.lat],
+          getFillColor: [80, 160, 235, 200],
+          getRadius: 20,
+          radiusMinPixels: 1.2,
+          radiusMaxPixels: 3,
+          stroked: false,
+          pickable: false,
+        })
+      : null,
+    // 7. active layer: only rows passing the filter, colored by the attribute (top)
     new ScatterplotLayer({
       id: "active",
       data: active,
@@ -104,7 +178,7 @@ export default function PersonaMap({ personas, boroughs, colorAttr, filterValues
       updateTriggers: { getFillColor: [colorAttr.key] },
       onHover: (info) =>
         setHover(
-          info.object ? { x: info.x, y: info.y, p: info.object as GeoPersona } : null,
+          info.object ? { kind: "persona", x: info.x, y: info.y, p: info.object as GeoPersona } : null,
         ),
     }),
   ];
@@ -118,7 +192,7 @@ export default function PersonaMap({ personas, boroughs, colorAttr, filterValues
         layers={layers}
         style={{ background: "transparent" }}
       />
-      {hover && (
+      {hover && hover.kind === "persona" && (
         <div
           className="pointer-events-none fixed z-50 max-w-xs rounded-lg border border-white/15 bg-neutral-900/95 p-3 text-xs text-neutral-100 shadow-xl backdrop-blur"
           style={{ left: hover.x + 14, top: hover.y + 14 }}
@@ -132,9 +206,46 @@ export default function PersonaMap({ personas, boroughs, colorAttr, filterValues
           <div className="text-neutral-400">
             HH income {hover.p.household_income == null ? "—" : `$${hover.p.household_income.toLocaleString()}`} · {hover.p.language_at_home}
           </div>
+          {hover.p.nearest_station_name && (
+            <div className="mt-1 text-neutral-400">
+              Nearest subway: {hover.p.nearest_station_name}
+              {hover.p.nearest_station_lines ? ` (${hover.p.nearest_station_lines})` : ""}
+              {" · "}
+              {hover.p.subway_distance_m != null
+                ? hover.p.subway_distance_m >= 1000
+                  ? `${(hover.p.subway_distance_m / 1000).toFixed(1)}km`
+                  : `${hover.p.subway_distance_m}m`
+                : ""}
+            </div>
+          )}
           {hover.p.context_notes && (
             <div className="mt-1 italic text-neutral-500">{hover.p.context_notes}</div>
           )}
+        </div>
+      )}
+      {hover && hover.kind === "station" && (
+        <div
+          className="pointer-events-none fixed z-50 max-w-xs rounded-lg border border-white/15 bg-neutral-900/95 p-3 text-xs text-neutral-100 shadow-xl backdrop-blur"
+          style={{ left: hover.x + 14, top: hover.y + 14 }}
+        >
+          <div className="font-medium text-neutral-200">{hover.s.name}</div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {hover.s.routes.split(" ").filter(Boolean).map((r) => {
+              const [cr, cg, cb] = routeColor(r);
+              return (
+                <span
+                  key={r}
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold leading-none"
+                  style={{ background: `rgb(${cr},${cg},${cb})`, color: cr > 200 && cg > 200 ? "#000" : "#fff" }}
+                >
+                  {r}
+                </span>
+              );
+            })}
+          </div>
+          <div className="mt-1 text-neutral-400">
+            {hover.s.ada === 0 ? "Not ADA accessible" : hover.s.ada === 1 ? "ADA accessible" : "Partially ADA accessible"}
+          </div>
         </div>
       )}
     </>
