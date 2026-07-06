@@ -7,7 +7,7 @@ import { GeoJsonLayer, ScatterplotLayer } from "@deck.gl/layers";
 import type { AttrDef } from "@/lib/map/attributes";
 import { FADED_RGBA, filterPredicate } from "@/lib/map/attributes";
 import type { GeoPersona } from "@/lib/map/persona";
-import type { TransitLayerKey, SubwayStation, CitiBikeData } from "@/lib/map/transit";
+import type { TransitLayerKey, SubwayStation, CitiBikeStation, CitiBikeData } from "@/lib/map/transit";
 import { routeColor, BIKE_CLASS_COLOR } from "@/lib/map/transit";
 
 const INITIAL_VIEW_STATE = {
@@ -146,10 +146,10 @@ export default function PersonaMap({ personas, boroughs, colorAttr, filterValues
       : null,
     // 6. Citi Bike stations (conditional)
     transitOn?.citibike && transitData?.citibike
-      ? new ScatterplotLayer({
+      ? new ScatterplotLayer<CitiBikeStation>({
           id: "citibike",
           data: transitData.citibike.stations,
-          getPosition: (s) => [s.lng, s.lat],
+          getPosition: (s: CitiBikeStation) => [s.lng, s.lat],
           getFillColor: [80, 160, 235, 200],
           getRadius: 20,
           radiusMinPixels: 1.2,
