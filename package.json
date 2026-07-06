@@ -9,6 +9,9 @@
     "lint": "eslint",
     "geo": "node scripts/geo/build_geo.mjs",
     "geo:boroughs": "node scripts/geo/build_boroughs.mjs",
+    "geo:transit": "node scripts/geo/build_transit.mjs",
+    "geo:enrich": "node scripts/geo/enrich_transit.mjs",
+    "geo:all": "npm run geo && npm run geo:boroughs && npm run geo:transit && npm run geo:enrich",
     "test": "vitest run",
     "test:watch": "vitest"
   },

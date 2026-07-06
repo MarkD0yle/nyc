@@ -46,3 +46,7 @@ scripts/out/
 scripts/.env
 scripts/.venv/
 scripts/geo/nyc_pumas_raw.geojson
+scripts/geo/subway_lines_raw.json
+scripts/geo/subway_stations_raw.json
+scripts/geo/bike_routes_raw.json
+scripts/geo/citibike_raw.json
