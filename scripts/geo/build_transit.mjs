@@ -41,17 +41,6 @@ function polygonsOf(geom) {
 function inGeometry(x, y, geom) {
   return polygonsOf(geom).some((poly) => inPolygon(x, y, poly));
 }
-function bboxOf(geom) {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const poly of polygonsOf(geom))
-    for (const ring of poly)
-      for (const [x, y] of ring) {
-        if (x < minX) minX = x; if (x > maxX) maxX = x;
-        if (y < minY) minY = y; if (y > maxY) maxY = y;
-      }
-  return [minX, minY, maxX, maxY];
-}
-
 // ── helpers ────────────────────────────────────────────────────────────────────
 
 async function fetchJson(url) {
