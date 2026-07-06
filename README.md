@@ -20,6 +20,17 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Data pipeline
+
+The static GeoJSON / JSON files in `public/` are pre-built. To regenerate:
+
+1. `npm run geo:transit` — fetches subway lines, stations, bike routes, and Citi Bike stations
+2. `npm run geo:enrich` — computes nearest-station distance and ADA status per persona
+
+Or run `npm run geo:all` to chain all geo scripts in order.
+
+> Citi Bike data is a live GBFS snapshot; the `fetched_at` timestamp will differ on each run.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

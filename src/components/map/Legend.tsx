@@ -1,13 +1,27 @@
 "use client";
 
 import type { AttrDef, RGB } from "@/lib/map/attributes";
+import { BIKE_CLASS_COLOR } from "@/lib/map/transit";
+import type { TransitLayerKey } from "@/lib/map/transit";
 
 // Ordinal values whose color is a fixed neutral gray rather than a ramp
 // position (e.g. income_band's "Unknown"). Rendered as a separate swatch
 // beneath the gradient, not as part of the ramp continuum.
 const NEUTRAL_ORDINAL_VALUES = new Set(["Unknown"]);
 
-export function Legend({ attr }: { attr: AttrDef }) {
+const BIKE_CLASS_LABELS: { key: "p" | "l" | "s"; label: string }[] = [
+  { key: "p", label: "Protected lane" },
+  { key: "l", label: "Lanes (marked)" },
+  { key: "s", label: "Shared route" },
+];
+
+export function Legend({
+  attr,
+  transitOn,
+}: {
+  attr: AttrDef;
+  transitOn?: Record<TransitLayerKey, boolean>;
+}) {
   if (attr.kind === "ordinal") {
     const rampValues = attr.values.filter((v) => !NEUTRAL_ORDINAL_VALUES.has(v));
     const neutralValues = attr.values.filter((v) => NEUTRAL_ORDINAL_VALUES.has(v));
@@ -32,6 +46,7 @@ export function Legend({ attr }: { attr: AttrDef }) {
             {v}
           </div>
         ))}
+        {transitOn?.bikeRoutes && <BikeSection />}
       </div>
     );
   }
@@ -48,6 +63,28 @@ export function Legend({ attr }: { attr: AttrDef }) {
             <div key={v} className="flex items-center gap-2 text-xs text-neutral-200">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: `rgb(${r},${g},${b})` }} />
               {v}
+            </div>
+          );
+        })}
+      </div>
+      {transitOn?.bikeRoutes && <BikeSection />}
+    </div>
+  );
+}
+
+function BikeSection() {
+  return (
+    <div className="border-t border-white/10 mt-2 pt-2">
+      <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+        Bike routes
+      </div>
+      <div className="flex flex-col gap-1">
+        {BIKE_CLASS_LABELS.map(({ key, label }) => {
+          const [r, g, b] = BIKE_CLASS_COLOR[key];
+          return (
+            <div key={key} className="flex items-center gap-2 text-xs text-neutral-200">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: `rgb(${r},${g},${b})` }} />
+              {label}
             </div>
           );
         })}

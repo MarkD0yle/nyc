@@ -104,7 +104,7 @@ export function MapClient() {
             transitOn={transitOn}
             onTransitOn={(k, on) => setTransitOn((prev) => ({ ...prev, [k]: on }))}
           />
-          <Legend attr={colorAttr} />
+          <Legend attr={colorAttr} transitOn={transitOn} />
         </div>
       )}
     </main>
