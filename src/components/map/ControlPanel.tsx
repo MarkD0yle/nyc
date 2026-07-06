@@ -2,6 +2,8 @@
 
 import type { AttrDef } from "@/lib/map/attributes";
 import { cn } from "@/lib/utils";
+import type { TransitLayerKey } from "@/lib/map/transit";
+import { TRANSIT_LAYERS } from "@/lib/map/transit";
 
 interface Props {
   attrs: AttrDef[];
@@ -11,10 +13,12 @@ interface Props {
   onFilterValues: (v: string[]) => void;
   shown: number;
   total: number;
+  transitOn: Record<TransitLayerKey, boolean>;
+  onTransitOn: (k: TransitLayerKey, on: boolean) => void;
 }
 
 export function ControlPanel({
-  attrs, colorKey, onColorKey, filterValues, onFilterValues, shown, total,
+  attrs, colorKey, onColorKey, filterValues, onFilterValues, shown, total, transitOn, onTransitOn,
 }: Props) {
   const active = attrs.find((a) => a.key === colorKey)!;
 
@@ -90,6 +94,26 @@ export function ControlPanel({
       <div className="mt-4 text-xs text-neutral-400">
         showing <span className="font-medium text-neutral-100">{shown.toLocaleString()}</span> of{" "}
         {total.toLocaleString()}
+      </div>
+
+      <div className="mt-4 text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+        Transit
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {TRANSIT_LAYERS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => onTransitOn(key, !transitOn[key])}
+            className={cn(
+              "rounded-md px-2 py-1 text-xs transition-colors",
+              transitOn[key]
+                ? "bg-white text-neutral-900"
+                : "bg-white/10 text-neutral-200 hover:bg-white/20",
+            )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );

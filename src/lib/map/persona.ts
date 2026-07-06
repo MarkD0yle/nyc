@@ -18,4 +18,8 @@ export interface GeoPersona {
   language_at_home: string;
   commute: string;
   context_notes: string;
+  subway_distance_m?: number;
+  nearest_station_name?: string;
+  nearest_station_lines?: string;
+  ada_nearby?: boolean;
 }
