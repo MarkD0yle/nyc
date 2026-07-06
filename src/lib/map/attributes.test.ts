@@ -5,6 +5,7 @@ import {
   buildAttributes,
   filterPredicate,
   incomeBand,
+  subwayDistanceBand,
 } from "@/lib/map/attributes";
 
 function persona(over: Partial<GeoPersona>): GeoPersona {
@@ -14,6 +15,10 @@ function persona(over: Partial<GeoPersona>): GeoPersona {
     education: "Bachelor's degree", employment: "Employed", personal_income: 20000,
     household_income: 45000, household_size: 2, housing: "renter", gross_rent: 1200,
     language_at_home: "English only", commute: "Bus", context_notes: "",
+    subway_distance_m: undefined,
+    nearest_station_name: undefined,
+    nearest_station_lines: undefined,
+    ada_nearby: undefined,
     ...over,
   };
 }
@@ -43,6 +48,24 @@ describe("ageBand", () => {
   });
 });
 
+describe("subwayDistanceBand", () => {
+  test.each([
+    [null, "Unknown"],
+    [undefined, "Unknown"],
+    [NaN, "Unknown"],
+    [0, "<400m"],
+    [399, "<400m"],
+    [400, "400–800m"],
+    [799, "400–800m"],
+    [800, "800–1600m"],
+    [1599, "800–1600m"],
+    [1600, ">1600m"],
+    [5000, ">1600m"],
+  ])("m %s → %s", (m, band) => {
+    expect(subwayDistanceBand(m as number | null | undefined)).toBe(band);
+  });
+});
+
 describe("buildAttributes", () => {
   const people = [
     ...Array.from({ length: 3 }, (_, i) => persona({ id: i, language_at_home: "Spanish" })),
@@ -52,10 +75,10 @@ describe("buildAttributes", () => {
   const attrs = buildAttributes(people);
   const byKey = (k: string) => attrs.find((a) => a.key === k)!;
 
-  test("exposes the six required attributes in order", () => {
+  test("exposes the eight required attributes in order", () => {
     expect(attrs.map((a) => a.key)).toEqual([
       "borough", "race_ethnicity", "housing", "income_band",
-      "language_at_home", "age_band",
+      "language_at_home", "age_band", "subway_distance", "ada_nearby",
     ]);
   });
 
@@ -118,6 +141,35 @@ describe("buildAttributes", () => {
     // not the mid-ramp orange that "Unknown" occupying the last slot would produce.
     expect(income.color("$150k+")).toEqual([240, 249, 33]);
     expect(income.color("<$30k")).not.toEqual(income.color("$150k+"));
+  });
+
+  test("subway_distance ordinal values are in order", () => {
+    expect(byKey("subway_distance").values).toEqual([
+      "<400m", "400–800m", "800–1600m", ">1600m", "Unknown",
+    ]);
+  });
+
+  test("subway_distance 'Unknown' renders neutral gray, distinct from every real band", () => {
+    const subway = byKey("subway_distance");
+    const unknownColor = subway.color("Unknown");
+    const realBands = ["<400m", "400–800m", "800–1600m", ">1600m"];
+    for (const band of realBands) {
+      expect(unknownColor).not.toEqual(subway.color(band));
+    }
+  });
+
+  test("ada_nearby categorical accessor: true → 'ADA accessible', false → 'Not accessible', undefined → 'Unknown'", () => {
+    const ada = byKey("ada_nearby");
+    expect(ada.accessor(persona({ ada_nearby: true }))).toBe("ADA accessible");
+    expect(ada.accessor(persona({ ada_nearby: false }))).toBe("Not accessible");
+    expect(ada.accessor(persona({ ada_nearby: undefined }))).toBe("Unknown");
+  });
+
+  test("filterPredicate on subway_distance: filter ['<400m'] passes m:300 but not m:500", () => {
+    const subway = byKey("subway_distance");
+    const pred = filterPredicate(subway, ["<400m"]);
+    expect(pred(persona({ subway_distance_m: 300 }))).toBe(true);
+    expect(pred(persona({ subway_distance_m: 500 }))).toBe(false);
   });
 });
 

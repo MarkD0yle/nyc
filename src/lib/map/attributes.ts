@@ -84,6 +84,14 @@ export function ageBand(age: number): string {
   return "65+";
 }
 
+export function subwayDistanceBand(m: number | null | undefined): string {
+  if (m == null || Number.isNaN(m)) return "Unknown";
+  if (m < 400) return "<400m";
+  if (m < 800) return "400–800m";
+  if (m < 1600) return "800–1600m";
+  return ">1600m";
+}
+
 function distinct(values: string[]): string[] {
   return [...new Set(values)];
 }
@@ -110,6 +118,19 @@ export function buildAttributes(personas: GeoPersona[]): AttrDef[] {
     ordinal("income_band", "Household income", ["<$30k", "$30–60k", "$60–100k", "$100–150k", "$150k+", "Unknown"], (p) => incomeBand(p.household_income), ["Unknown"]),
     languageAttr(personas),
     ordinal("age_band", "Age", ["<18", "18–29", "30–44", "45–64", "65+"], (p) => ageBand(p.age)),
+    ordinal(
+      "subway_distance",
+      "Subway access",
+      ["<400m", "400–800m", "800–1600m", ">1600m", "Unknown"],
+      (p) => subwayDistanceBand(p.subway_distance_m),
+      ["Unknown"],
+    ),
+    categorical(
+      "ada_nearby",
+      "Nearest station ADA",
+      ["ADA accessible", "Not accessible", "Unknown"],
+      (p) => p.ada_nearby == null ? "Unknown" : p.ada_nearby ? "ADA accessible" : "Not accessible",
+    ),
   ];
 }
 
